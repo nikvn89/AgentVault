@@ -94,3 +94,31 @@ dd { margin: 0; overflow-wrap: anywhere; }
   .stats, .grid.two, .grid.four { grid-template-columns: 1fr; }
   .money { text-align: left; }
 }
+
+.registry-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin: 4px 0 10px;
+}
+.registry-tabs button {
+  border: 1px solid #223247;
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: #0b1622;
+  color: #8394a8;
+  font-weight: 800;
+}
+.registry-tabs button b {
+  margin-left: 5px;
+  font-size: 11px;
+}
+.registry-tabs button.active {
+  background: #12382e;
+  border-color: #46bf9d;
+  color: #75e7c0;
+}
+.registry-empty {
+  padding: 18px 8px 10px;
+  text-align: center;
+}

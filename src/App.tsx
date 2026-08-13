@@ -49,6 +49,7 @@ export default function App() {
   const [account, setAccount] = useState<Address | null>(null)
   const [tab, setTab] = useState<Tab>('vault')
   const [mandates, setMandates] = useState<Mandate[]>([])
+  const [listMode, setListMode] = useState<'active' | 'history'>('active')
   const [selectedId, setSelectedId] = useState(Number(localStorage.getItem(LAST_MANDATE_KEY) || 0))
   const [selected, setSelected] = useState<Mandate | null>(null)
   const [limits, setLimits] = useState<any>(null)
@@ -82,6 +83,29 @@ export default function App() {
   }, [account, selected])
 
   const available = selected ? toBig(selected.funded) - toBig(selected.spent) : 0n
+
+  const activeMandates = useMemo(
+    () => mandates.filter((m) => String(m.status).toUpperCase() === 'ACTIVE'),
+    [mandates],
+  )
+
+  const historyMandates = useMemo(
+    () => mandates.filter((m) => String(m.status).toUpperCase() !== 'ACTIVE'),
+    [mandates],
+  )
+
+  const visibleMandates = listMode === 'active' ? activeMandates : historyMandates
+
+  function changeListMode(mode: 'active' | 'history') {
+    setListMode(mode)
+
+    const target = mode === 'active' ? activeMandates : historyMandates
+    const selectedVisible = target.some((m) => m.id === selectedId)
+
+    if (!selectedVisible && target[0]) {
+      setSelectedId(target[0].id)
+    }
+  }
 
   useEffect(() => {
     void (async () => {
@@ -368,10 +392,45 @@ export default function App() {
       {tab === 'vault' && (
         <div className="vault-layout">
           <aside className="card list-card">
-            <div className="section-title"><div><span>REGISTRY</span><h3>Recent mandates</h3></div><button className="icon" onClick={() => refreshAll()}>↻</button></div>
-            {mandates.length === 0 ? <p className="muted">No mandates loaded.</p> : mandates.map((m) => (
-              <button key={m.id} className={`mandate-row ${selectedId === m.id ? 'selected' : ''}`} onClick={() => setSelectedId(m.id)}>
-                <div><strong>#{m.id}</strong><span className={`pill ${String(m.status).toLowerCase()}`}>{m.status}</span></div>
+            <div className="section-title">
+              <div>
+                <span>REGISTRY</span>
+                <h3>{listMode === 'active' ? 'Active mandates' : 'History'}</h3>
+              </div>
+              <button className="icon" onClick={() => refreshAll()}>↻</button>
+            </div>
+
+            <div className="registry-tabs">
+              <button
+                className={listMode === 'active' ? 'active' : ''}
+                onClick={() => changeListMode('active')}
+              >
+                Active <b>{activeMandates.length}</b>
+              </button>
+              <button
+                className={listMode === 'history' ? 'active' : ''}
+                onClick={() => changeListMode('history')}
+              >
+                History <b>{historyMandates.length}</b>
+              </button>
+            </div>
+
+            {visibleMandates.length === 0 ? (
+              <p className="muted registry-empty">
+                {listMode === 'active'
+                  ? 'No active mandates.'
+                  : 'No completed mandates yet.'}
+              </p>
+            ) : visibleMandates.map((m) => (
+              <button
+                key={m.id}
+                className={`mandate-row ${selectedId === m.id ? 'selected' : ''}`}
+                onClick={() => setSelectedId(m.id)}
+              >
+                <div>
+                  <strong>#{m.id}</strong>
+                  <span className={`pill ${String(m.status).toLowerCase()}`}>{m.status}</span>
+                </div>
                 <p>{m.mandate_text}</p>
                 <small>{short(m.agent)}</small>
               </button>
