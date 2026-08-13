@@ -1,0 +1,4 @@
+AgentVault StudioNet deployment
+Contract: 0xb3d76B5517a14A846e9FF8b73a48e582A034de25
+Explorer: https://explorer-studio.genlayer.com/address/0xb3d76B5517a14A846e9FF8b73a48e582A034de25
+Contract source: contracts/AgentVault.py
