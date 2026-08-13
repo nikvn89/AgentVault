@@ -56,6 +56,7 @@ export default function App() {
 
   const [busy, setBusy] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [initialLoaded, setInitialLoaded] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [txHash, setTxHash] = useState('')
@@ -198,6 +199,7 @@ export default function App() {
 
       setMandates(items)
       setLimits(lim)
+      setInitialLoaded(true)
 
       let wanted = selectedId
 
@@ -404,9 +406,22 @@ export default function App() {
 
       <section className="stats">
         <article><span>Contract</span><strong>{short(CONTRACT_ADDRESS)}</strong></article>
-        <article><span>Loaded mandates</span><strong>{mandates.length}</strong></article>
-        <article><span>Registry limit</span><strong>{limits?.max_registry_mandates ?? limits?.MAX_REGISTRY_MANDATES ?? '—'}</strong></article>
-        <article><span>Your role</span><strong>{role}</strong></article>
+        <article>
+          <span>Loaded mandates</span>
+          <strong>{initialLoaded ? mandates.length : 'Loading…'}</strong>
+        </article>
+        <article>
+          <span>Registry limit</span>
+          <strong>
+            {initialLoaded
+              ? (limits?.max_registry_mandates ?? limits?.MAX_REGISTRY_MANDATES ?? '—')
+              : 'Loading…'}
+          </strong>
+        </article>
+        <article>
+          <span>Your role</span>
+          <strong>{initialLoaded ? role : 'Loading…'}</strong>
+        </article>
       </section>
 
       <nav className="tabs">
@@ -472,17 +487,19 @@ export default function App() {
                 className={listMode === 'active' ? 'active' : ''}
                 onClick={() => changeListMode('active')}
               >
-                Active <b>{activeMandates.length}</b>
+                Active <b>{initialLoaded ? activeMandates.length : '…'}</b>
               </button>
               <button
                 className={listMode === 'history' ? 'active' : ''}
                 onClick={() => changeListMode('history')}
               >
-                History <b>{historyMandates.length}</b>
+                History <b>{initialLoaded ? historyMandates.length : '…'}</b>
               </button>
             </div>
 
-            {visibleMandates.length === 0 ? (
+            {!initialLoaded ? (
+              <p className="muted registry-empty">Loading on-chain state…</p>
+            ) : visibleMandates.length === 0 ? (
               <p className="muted registry-empty">
                 {listMode === 'active'
                   ? 'No active mandates.'
@@ -552,6 +569,11 @@ export default function App() {
                   </article>
                 </section>
               </>
+            ) : !initialLoaded ? (
+              <article className="card empty">
+                <h2>Loading on-chain state…</h2>
+                <p>Waiting for StudioNet RPC. Existing mandates remain on-chain.</p>
+              </article>
             ) : (
               <article className="card empty"><h2>Select a mandate</h2><p>Refresh the registry or create a new mandate.</p></article>
             )}
