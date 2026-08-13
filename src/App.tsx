@@ -55,6 +55,7 @@ export default function App() {
   const [limits, setLimits] = useState<any>(null)
 
   const [busy, setBusy] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [txHash, setTxHash] = useState('')
@@ -74,6 +75,9 @@ export default function App() {
   const [actionDescription, setActionDescription] = useState('Purchase GPU compute for project infrastructure.')
 
   const lock = useRef(false)
+  const selectedReadSeq = useRef(0)
+  const fullRefreshSeq = useRef(0)
+  const lastRefreshAt = useRef(0)
 
   const role = useMemo(() => {
     if (!account || !selected) return 'OBSERVER'
@@ -167,45 +171,102 @@ export default function App() {
   }
 
   async function refreshAll(show = true) {
+    const now = Date.now()
+
+    if (refreshing) return
+
+    // Prevent rapid manual refresh bursts against StudioNet.
+    if (show && now - lastRefreshAt.current < 5000) {
+      setNotice('State was refreshed recently. Please wait a few seconds.')
+      return
+    }
+
+    if (show) lastRefreshAt.current = now
+
+    const seq = ++fullRefreshSeq.current
+    setRefreshing(true)
+
     try {
-      const [items, lim] = await Promise.all([
-        loadRecentMandates(CONTRACT_ADDRESS, 12),
-        getRegistryLimits(CONTRACT_ADDRESS),
-      ])
+      // Sequential instead of Promise.all to reduce concurrent RPC pressure.
+      const items = await loadRecentMandates(CONTRACT_ADDRESS, 12)
+
+      if (seq !== fullRefreshSeq.current) return
+
+      const lim = await getRegistryLimits(CONTRACT_ADDRESS)
+
+      if (seq !== fullRefreshSeq.current) return
+
       setMandates(items)
       setLimits(lim)
 
-      const wanted = selectedId || items[0]?.id || 0
+      let wanted = selectedId
+
+      if (!wanted || !items.some((m) => m.id === wanted)) {
+        const preferred =
+          listMode === 'active'
+            ? items.find((m) => String(m.status).toUpperCase() === 'ACTIVE')
+            : items.find((m) => String(m.status).toUpperCase() !== 'ACTIVE')
+
+        wanted = preferred?.id ?? items[0]?.id ?? 0
+      }
+
       if (wanted) {
+        const mandate = items.find((m) => m.id === wanted) ?? null
+
         setSelectedId(wanted)
-        const m = await getMandate(CONTRACT_ADDRESS, wanted)
-        setSelected(m)
-        if (m) {
-          const rs = recipientsOf(m)
+        setSelected(mandate)
+
+        if (mandate) {
+          const rs = recipientsOf(mandate)
           if (rs[0]) setActionRecipient(rs[0].address)
         }
+      } else {
+        setSelected(null)
       }
-      if (show) setNotice('State refreshed.')
+
+      if (show) {
+        setError('')
+        setNotice('State refreshed.')
+      }
     } catch (e) {
+      if (seq !== fullRefreshSeq.current) return
       setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (seq === fullRefreshSeq.current) {
+        setRefreshing(false)
+      }
     }
   }
 
   async function refreshSelected(id = selectedId, quiet = false) {
     if (!id) return
+
+    const seq = ++selectedReadSeq.current
+
     try {
       const m = await getMandate(CONTRACT_ADDRESS, id)
+
+      // Ignore a response belonging to an older selection.
+      if (seq !== selectedReadSeq.current) return
+
       setSelected(m)
+
       if (m) {
         setMandates((prev) => {
           const rest = prev.filter((x) => x.id !== id)
           return [m, ...rest].sort((a, b) => b.id - a.id)
         })
+
         const rs = recipientsOf(m)
-        if (rs[0] && !actionRecipient) setActionRecipient(rs[0].address)
+        if (rs[0]) setActionRecipient(rs[0].address)
       }
-      if (!quiet) setNotice(`Mandate #${id} refreshed.`)
+
+      if (!quiet) {
+        setError('')
+        setNotice(`Mandate #${id} refreshed.`)
+      }
     } catch (e) {
+      if (seq !== selectedReadSeq.current) return
       if (!quiet) setError(e instanceof Error ? e.message : String(e))
     }
   }
@@ -243,7 +304,6 @@ export default function App() {
       setNotice(`${functionName} accepted. Refreshing state…`)
       await new Promise((r) => setTimeout(r, 1600))
       await refreshAll(false)
-      if (selectedId) await refreshSelected(selectedId, true)
       setNotice(`${functionName} confirmed on-chain.`)
     })
   }
@@ -397,7 +457,14 @@ export default function App() {
                 <span>REGISTRY</span>
                 <h3>{listMode === 'active' ? 'Active mandates' : 'History'}</h3>
               </div>
-              <button className="icon" onClick={() => refreshAll()}>↻</button>
+              <button
+                className="icon"
+                onClick={() => refreshAll()}
+                disabled={refreshing}
+                title={refreshing ? 'Refreshing…' : 'Refresh state'}
+              >
+                {refreshing ? '…' : '↻'}
+              </button>
             </div>
 
             <div className="registry-tabs">
