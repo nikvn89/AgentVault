@@ -1090,6 +1090,9 @@ Return JSON only:
                 == validator_decision
             )
 
+        # Only `decision` is validator-consensus-bound in validator_fn.
+        # `failed_check` and `reason` are advisory leader-provided metadata
+        # stored for UX/explanation and never gate value transfer.
         result = gl.vm.run_nondet_unsafe(
             evaluate_action,
             validator_fn,
