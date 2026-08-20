@@ -6,6 +6,22 @@ import { STUDIO_RPC } from './config'
 
 export type Address = `0x${string}`
 
+export type ActionRequest = {
+  id: number
+  mandate_id: number
+  agent: string
+  recipient: string
+  recipient_label: string
+  amount: string | number
+  description: string
+  status: string
+  decision: string
+  failed_check: number
+  reason: string
+  resolved_at: string | number
+  [key: string]: unknown
+}
+
 export type Mandate = {
   id: number
   principal: string
@@ -230,6 +246,56 @@ export async function getRegistryLimits(
   return parseJson(
     await readRaw(address, 'get_registry_limits'),
   )
+}
+
+function normalizeActionRequest(
+  raw: any,
+  fallbackId: number,
+  mandateId: number,
+): ActionRequest {
+  return {
+    ...raw,
+    id: Number(raw?.id ?? fallbackId),
+    mandate_id: Number(raw?.mandate_id ?? mandateId),
+    agent: String(raw?.agent ?? ''),
+    recipient: String(raw?.recipient ?? ''),
+    recipient_label: String(raw?.recipient_label ?? ''),
+    amount: raw?.amount ?? 0,
+    description: String(raw?.description ?? ''),
+    status: String(raw?.status ?? ''),
+    decision: String(raw?.decision ?? ''),
+    failed_check: Number(raw?.failed_check ?? 0),
+    reason: String(raw?.reason ?? ''),
+    resolved_at: raw?.resolved_at ?? '',
+  }
+}
+
+export async function getMandateRequests(
+  address: Address,
+  mandateId: number,
+): Promise<ActionRequest[]> {
+  const raw = parseJson(
+    await readRaw(
+      address,
+      'get_mandate_requests',
+      [BigInt(mandateId)],
+    ),
+  )
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return []
+  }
+
+  return Object.entries(raw)
+    .map(([requestId, request]) =>
+      normalizeActionRequest(
+        request,
+        Number(requestId) || 0,
+        mandateId,
+      ),
+    )
+    .filter((request) => request.id > 0)
+    .sort((a, b) => b.id - a.id)
 }
 
 export async function loadRecentMandates(
