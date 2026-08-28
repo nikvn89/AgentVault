@@ -64,3 +64,28 @@ The consensus result is normalized to:
   "failed_check": 0,
   "reason": "short explanation"
 }
+```
+
+
+## How to try it
+
+**You need a little StudioNet GEN. You fund only your own mandate, and the Principal can recover any unspent balance with `withdraw_unused`.**
+
+1. Connect MetaMask at `https://agent-vault-lake.vercel.app/` using GenLayer StudioNet.
+2. Create your own mandate. Use your connected wallet as the Principal and a second address you control as the Agent. Write a narrow purpose in plain English, add one trusted recipient with a clear role label, then set a small total budget, per-action cap, maximum action count, and expiry.
+3. Fund that mandate with a small amount of your own StudioNet GEN.
+4. Switch to the Agent wallet and request a payment that clearly fits the mandate. Expect `AUTHORIZED`; if every deterministic check also passes, native GEN is transferred to the trusted recipient.
+5. Submit another request whose stated purpose is clearly outside the mandate. Expect `DENIED`; no GEN is transferred, but the resolved request still consumes an action slot.
+6. Switch back to the Principal wallet. Revoke when finished if desired, then use `withdraw_unused` to recover the GEN that remains unspent.
+
+### Mandate immutability
+
+The mandate text, Agent, trusted-recipient set, budget, per-action cap, action limit, and expiry are fixed when the mandate is created. If different terms are needed, create a new mandate. The Principal can revoke an existing mandate and withdraw its unused funded balance.
+
+## Honest limitation
+
+AgentVault evaluates one thing: whether a proposed spending action, **as described in words**, falls within the natural-language mandate that the Principal recorded onchain.
+
+It does not verify who controls an Agent wallet in the real world, verify the real-world identity of a recipient, confirm that goods or services were actually delivered, or track funds after they leave the mandate.
+
+Budget, per-action cap, action count, expiry, recipient allowlisting, funded balance, and transfer amount are deterministic contract rules. **The model never chooses the amount.** An `AUTHORIZED` result means only that the contract accepted the submitted description as fitting the recorded mandate after deterministic pre-checks.
