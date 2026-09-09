@@ -72,6 +72,20 @@ because they show what a green suite can hide:
   the contract's own message — and that is what is read now. A refused action
   surfaces the contract's exact words: "The contract refused this action:
   Mandate has insufficient funded balance."
+  The first replacement over-corrected and is recorded here too, because a
+  reviewer hit it: it treated a `result.status` of "error" or "no_leaders"
+  anywhere in the consensus data as a failure, and against a request that
+  succeeded on chain it produced "The contract refused this action: idle".
+  "idle" is consensus bookkeeping about a validator, not a contract message,
+  and the request it was attached to was recorded AUTHORIZED and EXECUTED.
+  Calling a successful payment refused is no better than the bug it replaced.
+  The check is now narrow: execution failure comes from `execution_result`
+  being "ERROR", and a human message is read only from the two result codes the
+  SDK decodes as UTF-8 (rollback and contract_error). Anything ambiguous is
+  treated as success and settled by the state reload that follows, which reads
+  the contract instead of guessing at a receipt. The receipt is also logged to
+  the console, so the next disagreement between the UI and the explorer is a
+  five-second diagnosis.
 - **An unfunded mandate is refused before it costs gas.** The contract enforced
   this correctly, but only after the agent had paid for a transaction that
   could never succeed. The available balance is on screen, so `request_action`
