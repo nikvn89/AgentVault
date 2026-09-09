@@ -163,30 +163,34 @@ export default function App() {
   const [busy, setBusy] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [initialLoaded, setInitialLoaded] = useState(false)
+  // Set when the registry read itself failed, so the panel can say so
+  // instead of sitting on "Loading on-chain state…" forever.
+  const [registryError, setRegistryError] = useState('')
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [txHash, setTxHash] = useState('')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
+  // Every field starts empty. Seeded values read as a demo rather than as a
+  // tool, and a pre-written mandate is the one field that must never be
+  // pre-written: it is the principal's own statement of what the agent may buy,
+  // and a default invites accepting text nobody chose. Guidance lives in the
+  // placeholders, which are not values and are never submitted. Client-side
+  // validation in `createMandate` rejects every empty field before a
+  // transaction is built, so an empty form costs no gas.
   const [agent, setAgent] = useState('')
-  const [mandateText, setMandateText] = useState(
-    'Purchase cloud infrastructure and GPU compute required to operate the project.',
-  )
+  const [mandateText, setMandateText] = useState('')
   const [recipient, setRecipient] = useState('')
-  const [recipientLabel, setRecipientLabel] = useState(
-    'Cloud infrastructure provider',
-  )
-  const [budget, setBudget] = useState('10')
-  const [cap, setCap] = useState('3')
-  const [maxActions, setMaxActions] = useState('4')
-  const [expiryDays, setExpiryDays] = useState('7')
+  const [recipientLabel, setRecipientLabel] = useState('')
+  const [budget, setBudget] = useState('')
+  const [cap, setCap] = useState('')
+  const [maxActions, setMaxActions] = useState('')
+  const [expiryDays, setExpiryDays] = useState('')
 
-  const [fundAmount, setFundAmount] = useState('10')
+  const [fundAmount, setFundAmount] = useState('')
   const [actionRecipient, setActionRecipient] = useState('')
-  const [actionAmount, setActionAmount] = useState('0.5')
-  const [actionDescription, setActionDescription] = useState(
-    'Purchase GPU compute for project infrastructure.',
-  )
+  const [actionAmount, setActionAmount] = useState('')
+  const [actionDescription, setActionDescription] = useState('')
 
   const lock = useRef(false)
   const selectedReadSeq = useRef(0)
@@ -281,14 +285,23 @@ export default function App() {
   }
 
   useEffect(() => {
+    // Two independent things, deliberately not chained.
+    //
+    // Reading the registry needs the RPC, not a wallet — every read in this app
+    // is a `view` call. Awaiting the wallet probe first meant the registry sat
+    // on "Loading…" behind a MetaMask round-trip, and if that probe rejected or
+    // never settled (a locked wallet, or several wallet extensions contending
+    // for window.ethereum) the registry never loaded at all, with nothing on
+    // screen to say why. A visitor with no wallet installed should still see
+    // every mandate on chain.
+    void refreshAll(false)
+
     void (async () => {
       const a = await getAuthorizedAccount()
 
       if (a) {
         setAccount(a)
       }
-
-      await refreshAll(false)
     })()
   }, [])
 
@@ -492,6 +505,7 @@ export default function App() {
       setMandates(items)
       setLimits(lim)
       setInitialLoaded(true)
+      setRegistryError('')
 
       let wanted = selectedId
 
@@ -563,6 +577,10 @@ export default function App() {
       }
 
       setError(
+        friendlyError(e),
+      )
+
+      setRegistryError(
         friendlyError(e),
       )
     } finally {
@@ -1398,6 +1416,7 @@ export default function App() {
             mandate
             <textarea
               rows={5}
+              placeholder="What may this agent spend on? e.g. Purchase cloud infrastructure and GPU compute for Project Atlas."
               value={mandateText}
               onChange={(e) =>
                 setMandateText(
@@ -1424,6 +1443,7 @@ export default function App() {
             <label>
               Recipient label
               <input
+                placeholder="Their role, e.g. GPU hosting provider"
                 value={
                   recipientLabel
                 }
@@ -1440,6 +1460,7 @@ export default function App() {
             <label>
               Total budget (GEN)
               <input
+                placeholder="0.05"
                 type="number"
                 min="0"
                 step="0.0001"
@@ -1467,6 +1488,7 @@ export default function App() {
             <label>
               Per-action cap (GEN)
               <input
+                placeholder="0.02"
                 type="number"
                 min="0"
                 step="0.0001"
@@ -1492,6 +1514,7 @@ export default function App() {
             <label>
               Max actions
               <input
+                placeholder="3"
                 type="number"
                 min="1"
                 max="50"
@@ -1520,6 +1543,7 @@ export default function App() {
             <label>
               Expires in days
               <input
+                placeholder="7"
                 type="number"
                 min="0.25"
                 step="0.25"
@@ -1597,6 +1621,7 @@ export default function App() {
             <label>
               Amount (GEN)
               <input
+                placeholder="0.01"
                 type="number"
                 min="0"
                 step="0.0001"
@@ -1625,6 +1650,7 @@ export default function App() {
               Action description
               <textarea
                 rows={4}
+                placeholder="What is this payment for? The validators read this text and nothing else about your intent."
                 value={
                   actionDescription
                 }
@@ -1750,7 +1776,13 @@ export default function App() {
               </button>
             </div>
 
-            {!initialLoaded ? (
+            {!initialLoaded &&
+            registryError ? (
+              <p className="history-error registry-empty">
+                {registryError}{' '}
+                Use ↻ to try again.
+              </p>
+            ) : !initialLoaded ? (
               <p className="muted registry-empty">
                 Loading on-chain
                 state…
@@ -2021,6 +2053,7 @@ export default function App() {
                       (GEN)
 
                       <input
+                        placeholder="0.05"
                         type="number"
                         min="0"
                         step="0.0001"
@@ -2143,6 +2176,22 @@ export default function App() {
 
                 {renderRequestHistory()}
               </>
+            ) : !initialLoaded &&
+              registryError ? (
+              <article className="card empty">
+                <h2>
+                  Could not read
+                  on-chain state
+                </h2>
+
+                <p>
+                  {registryError}{' '}
+                  Existing mandates
+                  remain on-chain;
+                  use ↻ to try
+                  again.
+                </p>
+              </article>
             ) : !initialLoaded ? (
               <article className="card empty">
                 <h2>
@@ -2155,6 +2204,9 @@ export default function App() {
                   StudioNet RPC.
                   Existing mandates
                   remain on-chain.
+                  No wallet is
+                  needed to read
+                  them.
                 </p>
               </article>
             ) : (
