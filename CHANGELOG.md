@@ -57,6 +57,15 @@ because they show what a green suite can hide:
   (production) proxy `/api/rpc` to Studio. Studio answers a rate-limited request
   without CORS headers, so the direct cross-origin call surfaced in the browser
   as an opaque `Failed to fetch` instead of the 429 it actually was.
+- **Every form field now starts empty.** The create-mandate form shipped with a
+  budget, a cap, an action limit, an expiry, a recipient label and — worst of
+  the set — a pre-written mandate already filled in. That reads as a demo rather
+  than a tool, and the mandate is the one field that must never be pre-written:
+  it is the principal's own statement of what the agent may buy, and a default
+  invites accepting text nobody chose. Guidance moved to placeholders, which are
+  not values and are never submitted. `createMandate`, `fundMandate` and
+  `requestAction` already reject every empty field before a transaction is
+  built, so an empty form costs no gas.
 - **The post-write state reload can no longer be skipped.** `refreshAll` bailed
   out whenever another read was already in flight — including the reload that
   runs after a write. When that happened the UI announced
