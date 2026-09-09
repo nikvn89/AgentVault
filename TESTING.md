@@ -1,6 +1,41 @@
-AgentVault — Testing Guide
+# AgentVault — Testing Guide
 
-Post-Steward Fix Verification Status
+## v1.1.0 verification — automated, run on this revision
+
+Every line below was executed. Anything not listed here was not run.
+
+| Check | Command | Result |
+|---|---|---|
+| Contract linter | `python3 -m genvm_linter.cli lint contracts/AgentVault.py` | `Lint passed (3 checks)`, exit 0 |
+| Contract suite, real GenVM | `python3 -m pytest tests/ -q` | **61 passed** in ~2s |
+| Mutation matrix | `python3 tests/mutation_check.py` | **22/22 killed**, 0 survived, 0 invalid |
+| Frontend typecheck + build | `npm run build` | clean |
+
+The suite runs `contracts/AgentVault.py` inside a real GenVM build
+(`v0.2.12`, pinned) through `genlayer-test` Direct Mode. No contract logic is
+re-implemented in the tests. See [`tests/README.md`](tests/README.md) for what
+comes from the harness rather than from GenVM — and for the four mutants that
+survived the first run.
+
+**The native GEN transfer itself is not asserted by the suite.** Direct Mode's
+wasi mock does not capture the outgoing `emit_transfer` message. That movement
+is evidenced by the browser run recorded below, not by the tests.
+
+### Browser verification of the v1.1.0 frontend
+
+The frontend changed in this release (Snap-free connect, explicit network
+switch, same-origin RPC proxy, post-write state reload). Those changes have been
+built and typechecked but **have not yet been re-run in a browser against the
+deployed contract**. This section will be filled in with the run, not
+anticipated by it.
+
+---
+
+## Historical record — v1.0.0
+
+Everything below this line predates v1.1.0 and is preserved as it was recorded.
+
+### Post-Steward Fix Verification Status
 
 The deployed contract remains unchanged:
 

@@ -193,6 +193,11 @@ export default function App() {
   const fullRefreshSeq = useRef(0)
   const lastRefreshAt = useRef(0)
 
+  // `refreshing` is React state, so a value read inside an async closure is the
+  // snapshot from when that closure was created. The ref is the live one, and
+  // the post-write refresh below has to branch on the live value.
+  const refreshingRef = useRef(false)
+
   function clearFieldError(field: NumericField) {
     setFieldErrors((prev) => {
       if (!prev[field]) return prev
@@ -409,8 +414,30 @@ export default function App() {
   ) {
     const now = Date.now()
 
-    if (refreshing) {
-      return
+    if (refreshingRef.current) {
+      // A manual refresh can simply drop out; the state is being reloaded
+      // anyway. A post-write refresh (show === false) must not: returning here
+      // would let `runWrite` announce "confirmed on-chain" over whatever the
+      // in-flight read had already produced, which is state from before the
+      // transaction. So wait for that read to finish and then do our own.
+      if (show) {
+        return
+      }
+
+      const waitedFrom = Date.now()
+
+      while (
+        refreshingRef.current &&
+        Date.now() - waitedFrom < 15000
+      ) {
+        await new Promise((r) =>
+          setTimeout(r, 150),
+        )
+      }
+
+      if (refreshingRef.current) {
+        return
+      }
     }
 
     // Prevent rapid manual refresh bursts against StudioNet.
@@ -432,6 +459,7 @@ export default function App() {
     const seq =
       ++fullRefreshSeq.current
 
+    refreshingRef.current = true
     setRefreshing(true)
 
     try {
@@ -542,6 +570,7 @@ export default function App() {
         seq ===
         fullRefreshSeq.current
       ) {
+        refreshingRef.current = false
         setRefreshing(false)
       }
     }

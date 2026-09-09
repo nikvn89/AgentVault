@@ -1,8 +1,7 @@
 import { createClient } from 'genlayer-js'
-import { studionet } from 'genlayer-js/chains'
 import { ExecutionResult, TransactionStatus } from 'genlayer-js/types'
 
-import { STUDIO_RPC } from './config'
+import { ensureStudioNet, proxiedChain } from './chain'
 
 export type Address = `0x${string}`
 
@@ -50,15 +49,7 @@ export class SubmittedButUnconfirmedError extends Error {
   }
 }
 
-const chain = {
-  ...studionet,
-  rpcUrls: {
-    ...studionet.rpcUrls,
-    default: {
-      http: [STUDIO_RPC],
-    },
-  },
-}
+const chain = proxiedChain
 
 const makeReadClient = () =>
   createClient({
@@ -150,14 +141,11 @@ export async function connectWallet(): Promise<Address> {
 
   const account = accounts[0] as Address
 
-  const client = createClient({
-    chain,
-    account,
-    provider: window.ethereum,
-  } as any)
-
-  // Current GenLayerJS expects the target network name explicitly.
-  await client.connect('studionet')
+  // Not `client.connect('studionet')`. That call adds and switches the network
+  // *and* installs the GenLayer MetaMask Snap, and a declined or unavailable
+  // Snap install used to block connecting altogether. `ensureStudioNet` does
+  // the network half only; see src/lib/chain.ts for why the Snap is not needed.
+  await ensureStudioNet()
 
   return account
 }
@@ -390,9 +378,12 @@ export async function writeVault(params: {
     params.account,
   )
 
-  // Do this BEFORE writeContract. If switching/connecting fails, no tx hash
-  // exists and the UI can safely report a normal error.
-  await client.connect('studionet')
+  // Do this BEFORE writeContract. If the switch fails, no tx hash exists and
+  // the UI can safely report a normal error. This also has to happen here:
+  // `assertChainMatch` in genlayer-js 1.1.8 opens with
+  // `if (chainConfig.isStudio) return;`, so the SDK does not check the wallet's
+  // network before `eth_sendTransaction` on StudioNet.
+  await ensureStudioNet()
 
   let hash: Address
 

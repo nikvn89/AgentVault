@@ -14,6 +14,21 @@ Instead of giving an agent unrestricted control of funds, the principal defines 
 - Contract source: `contracts/AgentVault.py`
 - Live dApp: `https://agent-vault-lake.vercel.app/`
 
+## Verification
+
+- [`tests/README.md`](tests/README.md) — 61 tests that run this contract inside a
+  real GenVM build, plus a 22-mutant matrix, all 22 killed. Nothing is stubbed.
+- [`SECURITY.md`](SECURITY.md) — what the contract guarantees, what it does not,
+  and the limitations accepted by design.
+- [`TESTING.md`](TESTING.md) — the manual run against the deployed contract.
+- [`CHANGELOG.md`](CHANGELOG.md) — what changed and why.
+
+```bash
+pip install "genlayer-test==0.29.2" "pytest>=8,<9"
+python3 -m pytest tests/ -q          # ~2s, no network, no wallet
+python3 tests/mutation_check.py      # 22 mutants, 22 killed
+```
+
 ## Problem
 
 Autonomous agents increasingly need to pay for infrastructure, APIs, services, data, and other resources.

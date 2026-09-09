@@ -4,3 +4,9 @@ dist/
 .env.local
 .vercel/
 .DS_Store
+
+# Build and test scratch
+tsconfig.tsbuildinfo
+artifacts/
+__pycache__/
+.pytest_cache/
