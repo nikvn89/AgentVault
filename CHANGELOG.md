@@ -57,6 +57,30 @@ because they show what a green suite can hide:
   (production) proxy `/api/rpc` to Studio. Studio answers a rate-limited request
   without CORS headers, so the direct cross-origin call surfaced in the browser
   as an opaque `Failed to fetch` instead of the 429 it actually was.
+- **A rolled-back transaction is no longer reported as confirmed.** This was
+  the worst bug in the release, found by a reviewer's own test run: two
+  `request_action` transactions rolled back on chain with
+  `Mandate has insufficient funded balance`, and the UI announced
+  `request_action confirmed on-chain.` for both. The cause is specific.
+  `writeVault` decided success from `receipt.txExecutionResultName`, but in
+  genlayer-js 1.1.8 only `decodeTransaction` sets that field, and
+  `waitForTransactionReceipt` routes a Studio chain through
+  `decodeLocalnetTransaction`, which never does. The field was always
+  `undefined`, so the check was dead code and every failure passed as a
+  success. The receipt does carry the answer — `consensus_data.leader_receipt`
+  has `execution_result` and a `result` of `{status, payload}` whose payload is
+  the contract's own message — and that is what is read now. A refused action
+  surfaces the contract's exact words: "The contract refused this action:
+  Mandate has insufficient funded balance."
+- **An unfunded mandate is refused before it costs gas.** The contract enforced
+  this correctly, but only after the agent had paid for a transaction that
+  could never succeed. The available balance is on screen, so `request_action`
+  now checks it client-side, and the Agent Request card carries a warning while
+  the selected mandate has no funded balance.
+- **Numeric placeholders now read as examples.** `0.05` in a placeholder is
+  indistinguishable from `0.05` typed into the field, and a reviewer read the
+  Fund amount placeholder as a filled value, clicked Fund Mandate, and went on
+  believing the mandate was funded when it was not. They now read `e.g. 0.05`.
 - **The registry no longer waits for a wallet — or dies with it.** The mount
   effect awaited `getAuthorizedAccount()` *before* loading on-chain state, and
   `getAuthorizedAccount` had no `try`/`catch`. So a wallet probe that rejected
