@@ -57,6 +57,18 @@ because they show what a green suite can hide:
   (production) proxy `/api/rpc` to Studio. Studio answers a rate-limited request
   without CORS headers, so the direct cross-origin call surfaced in the browser
   as an opaque `Failed to fetch` instead of the 429 it actually was.
+- **The registry no longer waits for a wallet — or dies with it.** The mount
+  effect awaited `getAuthorizedAccount()` *before* loading on-chain state, and
+  `getAuthorizedAccount` had no `try`/`catch`. So a wallet probe that rejected
+  or never settled — a locked wallet, or several wallet extensions contending
+  for `window.ethereum` — left the registry on "Loading on-chain state…"
+  permanently, with nothing on screen to say why. Every read in this app is a
+  `view` call and needs no wallet at all, so the two are now independent: state
+  loads immediately, the wallet probe fails to "not connected". A visitor with
+  no wallet installed sees every mandate on chain.
+- **A failed registry read now says so.** It previously left the same
+  "Loading…" text on screen forever. The panel now shows the error and points
+  at the ↻ button.
 - **Every form field now starts empty.** The create-mandate form shipped with a
   budget, a cap, an action limit, an expiry, a recipient label and — worst of
   the set — a pre-written mandate already filled in. That reads as a demo rather
