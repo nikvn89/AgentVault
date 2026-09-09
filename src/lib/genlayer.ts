@@ -59,15 +59,48 @@ export class ContractRevertedError extends Error {
  * always undefined here, the old check never fired, and a rolled-back
  * transaction was reported to the user as confirmed.
  *
- * What StudioNet does return is the leader receipt. `execution_result` is
- * "ERROR" on failure, and `result` is `{status, payload}` where status is one
- * of return | rollback | contract_error | error | none | no_leaders and, for a
- * rollback or a contract error, `payload` is the contract's own message — the
- * same string the explorer prints.
+ * The first attempt to replace it over-corrected. It treated a `result.status`
+ * of "error" or "no_leaders" anywhere in the consensus data as a failure and
+ * surfaced whatever string sat in `payload`. Against a request that succeeded
+ * on chain, that produced "The contract refused this action: idle" — "idle" is
+ * consensus bookkeeping about a validator, not a contract message, and the
+ * request it was attached to was recorded AUTHORIZED and EXECUTED. Reporting a
+ * successful payment as refused is no better than the bug it replaced.
+ *
+ * So this is deliberately narrow. It reports failure only on the two signals
+ * that mean execution itself failed, and it reads a human message only from
+ * `result.status` values the SDK documents as carrying one — `resultToUserFriendlyJson`
+ * decodes `payload` as UTF-8 for exactly two result codes, rollback (1) and
+ * contract_error (2), and leaves it null for every other. Anything ambiguous is
+ * treated as success here and settled by the state reload that follows, which
+ * reads the contract rather than guessing at a receipt.
  */
+function receiptMessage(
+  entry: any,
+): string {
+  const status = String(
+    entry?.result?.status ?? '',
+  ).toLowerCase()
+
+  if (
+    status !== 'rollback' &&
+    status !== 'contract_error'
+  ) {
+    return ''
+  }
+
+  const payload = entry?.result?.payload
+
+  return typeof payload === 'string' &&
+    payload.trim()
+    ? payload.trim()
+    : ''
+}
+
 function executionFailure(
   receipt: any,
 ): string | null {
+  // Left in for non-Studio chains, where decodeTransaction does set it.
   if (
     receipt?.txExecutionResultName ===
     ExecutionResult.FINISHED_WITH_ERROR
@@ -85,30 +118,20 @@ function executionFailure(
       : []
 
   for (const entry of receipts) {
-    const status = String(
-      entry?.result?.status ?? '',
-    ).toLowerCase()
+    const executed = String(
+      entry?.execution_result ?? '',
+    ).toUpperCase()
 
-    if (
-      status === 'rollback' ||
-      status === 'contract_error' ||
-      status === 'error' ||
-      status === 'no_leaders'
-    ) {
-      const payload = entry?.result?.payload
-
-      return typeof payload === 'string' &&
-        payload.trim()
-        ? payload.trim()
-        : ''
+    // The one field the explorer itself shows as "Execution Result".
+    if (executed === 'ERROR') {
+      return receiptMessage(entry)
     }
 
-    if (
-      String(
-        entry?.execution_result ?? '',
-      ).toUpperCase() === 'ERROR'
-    ) {
-      return ''
+    // A rollback carries its message here even when execution_result is absent.
+    const message = receiptMessage(entry)
+
+    if (message) {
+      return message
     }
   }
 
@@ -493,6 +516,25 @@ export async function writeVault(params: {
         hash,
         params.finalized,
       )
+
+    // The receipt shape on StudioNet is not documented and has already been
+    // misread twice here. Logging it makes the next disagreement between what
+    // the UI says and what the explorer says a five-second diagnosis instead of
+    // a guess.
+    try {
+      console.log(
+        `[AgentVault] ${params.functionName} receipt`,
+        JSON.stringify(
+          (receipt as any)
+            ?.consensus_data ?? receipt,
+        ),
+      )
+    } catch {
+      console.log(
+        `[AgentVault] ${params.functionName} receipt`,
+        receipt,
+      )
+    }
 
     const failure =
       executionFailure(receipt)
