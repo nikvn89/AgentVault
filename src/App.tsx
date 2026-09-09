@@ -1053,6 +1053,16 @@ export default function App() {
       )
     }
 
+    // The contract enforces this too, and did — but only after the agent had
+    // paid gas for a transaction that could never succeed. An unfunded mandate
+    // is visible from here, so say so before building the transaction.
+    if (value > available) {
+      return setError(
+        `This mandate has ${gen(available)} available. ` +
+          'The Principal must fund it before the Agent can spend.',
+      )
+    }
+
     void runWrite(
       'Consensus reviewing action',
       'request_action',
@@ -1460,7 +1470,7 @@ export default function App() {
             <label>
               Total budget (GEN)
               <input
-                placeholder="0.05"
+                placeholder="e.g. 0.05"
                 type="number"
                 min="0"
                 step="0.0001"
@@ -1488,7 +1498,7 @@ export default function App() {
             <label>
               Per-action cap (GEN)
               <input
-                placeholder="0.02"
+                placeholder="e.g. 0.02"
                 type="number"
                 min="0"
                 step="0.0001"
@@ -1514,7 +1524,7 @@ export default function App() {
             <label>
               Max actions
               <input
-                placeholder="3"
+                placeholder="e.g. 3"
                 type="number"
                 min="1"
                 max="50"
@@ -1543,7 +1553,7 @@ export default function App() {
             <label>
               Expires in days
               <input
-                placeholder="7"
+                placeholder="e.g. 7"
                 type="number"
                 min="0.25"
                 step="0.25"
@@ -1621,7 +1631,7 @@ export default function App() {
             <label>
               Amount (GEN)
               <input
-                placeholder="0.01"
+                placeholder="e.g. 0.01"
                 type="number"
                 min="0"
                 step="0.0001"
@@ -1661,6 +1671,20 @@ export default function App() {
                 }
               />
             </label>
+
+            {selected &&
+              available <= 0n && (
+                <div className="history-error">
+                  Mandate #
+                  {selected.id} has
+                  no funded balance.
+                  The Principal must
+                  fund it in the
+                  Vault tab before
+                  any request can
+                  succeed.
+                </div>
+              )}
 
             <div className="hint">
               GenLayer consensus
@@ -2053,7 +2077,7 @@ export default function App() {
                       (GEN)
 
                       <input
-                        placeholder="0.05"
+                        placeholder="e.g. 0.05"
                         type="number"
                         min="0"
                         step="0.0001"

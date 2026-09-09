@@ -39,6 +39,82 @@ export type Mandate = {
   [key: string]: unknown
 }
 
+export class ContractRevertedError extends Error {
+  hash: Address
+
+  constructor(hash: Address, message: string) {
+    super(message)
+    this.name = 'ContractRevertedError'
+    this.hash = hash
+  }
+}
+
+/**
+ * Did this transaction actually fail on chain?
+ *
+ * `receipt.txExecutionResultName` is NOT the answer on StudioNet, and relying
+ * on it was a real bug: in genlayer-js 1.1.8 only `decodeTransaction` sets that
+ * field, and `waitForTransactionReceipt` routes a Studio chain through
+ * `decodeLocalnetTransaction` instead, which never sets it. So the field is
+ * always undefined here, the old check never fired, and a rolled-back
+ * transaction was reported to the user as confirmed.
+ *
+ * What StudioNet does return is the leader receipt. `execution_result` is
+ * "ERROR" on failure, and `result` is `{status, payload}` where status is one
+ * of return | rollback | contract_error | error | none | no_leaders and, for a
+ * rollback or a contract error, `payload` is the contract's own message — the
+ * same string the explorer prints.
+ */
+function executionFailure(
+  receipt: any,
+): string | null {
+  if (
+    receipt?.txExecutionResultName ===
+    ExecutionResult.FINISHED_WITH_ERROR
+  ) {
+    return ''
+  }
+
+  const leader =
+    receipt?.consensus_data?.leader_receipt
+
+  const receipts = Array.isArray(leader)
+    ? leader
+    : leader
+      ? [leader]
+      : []
+
+  for (const entry of receipts) {
+    const status = String(
+      entry?.result?.status ?? '',
+    ).toLowerCase()
+
+    if (
+      status === 'rollback' ||
+      status === 'contract_error' ||
+      status === 'error' ||
+      status === 'no_leaders'
+    ) {
+      const payload = entry?.result?.payload
+
+      return typeof payload === 'string' &&
+        payload.trim()
+        ? payload.trim()
+        : ''
+    }
+
+    if (
+      String(
+        entry?.execution_result ?? '',
+      ).toUpperCase() === 'ERROR'
+    ) {
+      return ''
+    }
+  }
+
+  return null
+}
+
 export class SubmittedButUnconfirmedError extends Error {
   hash: Address
 
@@ -418,23 +494,22 @@ export async function writeVault(params: {
         params.finalized,
       )
 
-    if (
-      receipt.txExecutionResultName &&
-      receipt.txExecutionResultName ===
-        ExecutionResult.FINISHED_WITH_ERROR
-    ) {
-      throw new Error(
-        `${params.functionName} reached consensus but contract execution failed.`,
+    const failure =
+      executionFailure(receipt)
+
+    if (failure !== null) {
+      throw new ContractRevertedError(
+        hash,
+        failure
+          ? `The contract refused this action: ${failure}`
+          : `${params.functionName} reached consensus but the contract rolled the transaction back. Nothing was changed on chain.`,
       )
     }
 
     return hash
   } catch (error) {
     if (
-      error instanceof Error &&
-      error.message.includes(
-        'contract execution failed',
-      )
+      error instanceof ContractRevertedError
     ) {
       throw error
     }
