@@ -119,11 +119,20 @@ function parseJson(value: unknown): any {
 export async function getAuthorizedAccount(): Promise<Address | null> {
   if (!window.ethereum) return null
 
-  const accounts = (await window.ethereum.request({
-    method: 'eth_accounts',
-  })) as string[]
+  // Never let a wallet probe throw. `eth_accounts` can reject or hang when the
+  // wallet is locked, or when several wallet extensions are contending for
+  // window.ethereum. This value is a convenience — reading contract state does
+  // not need it — so a failure here must degrade to "not connected" rather than
+  // propagate into whatever called it.
+  try {
+    const accounts = (await window.ethereum.request({
+      method: 'eth_accounts',
+    })) as string[]
 
-  return accounts[0] ? (accounts[0] as Address) : null
+    return accounts[0] ? (accounts[0] as Address) : null
+  } catch {
+    return null
+  }
 }
 
 export async function connectWallet(): Promise<Address> {
