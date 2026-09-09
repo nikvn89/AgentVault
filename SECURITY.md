@@ -101,7 +101,9 @@ agent.
   re-describe the same spend indefinitely until a verdict came back favourable.
   The action counter is what bounds those attempts, so it has to advance on
   refusal too. The cost is real: a genuinely misworded request costs the
-  principal a slot.
+  principal a slot. Observed on chain in [`TESTING.md`](TESTING.md) §8: after one
+  AUTHORIZED and one DENIED request of 0.01 GEN each, `spent` is 0.01 and
+  `actions_used` is 2.
 - **Semantic judgment is judgment, and it does not always settle.**
   `request_action` runs `gl.vm.run_nondet_unsafe`, and the validator re-runs the
   evaluation independently. When the leader's verdict and the validator's

@@ -23,11 +23,126 @@ is evidenced by the browser run recorded below, not by the tests.
 
 ### Browser verification of the v1.1.0 frontend
 
-The frontend changed in this release (Snap-free connect, explicit network
-switch, same-origin RPC proxy, post-write state reload). Those changes have been
-built and typechecked but **have not yet been re-run in a browser against the
-deployed contract**. This section will be filled in with the run, not
-anticipated by it.
+Run on 2026-09-09 against the deployed contract on StudioNet, from Chrome with
+MetaMask. Two wallets: `0x6276…57f4` as Principal, `0x037f…1cde` as Agent,
+paying `0x146e…ec8e` as the allowlisted recipient. Mandate **#6**.
+
+Every screenshot below is a real screen from that run. Where a screenshot shows
+something failing, it is kept rather than retaken.
+
+#### 1. On-chain state is readable with no wallet at all
+
+Every read in this app is a `view` call. A visitor with no wallet connected
+sees the whole registry; the role reads `OBSERVER`.
+
+![Registry loaded with no wallet connected](docs/evidence/01-registry-without-wallet.png)
+
+#### 2. Nothing is pre-filled
+
+The create-mandate form ships empty. The grey text is placeholder guidance and
+is never submitted — the mandate in particular is the Principal's own statement
+of what the Agent may buy, and a default would invite accepting text nobody
+chose.
+
+![Create mandate form with every field empty](docs/evidence/02-empty-form.png)
+
+#### 3. Connecting the wallet — with no Snap install
+
+`Connect Wallet` switches MetaMask to GenLayer Studio Network and stops there.
+The GenLayer MetaMask Snap is never requested, and the role resolves to
+`PRINCIPAL`.
+
+![Wallet connected, role PRINCIPAL](docs/evidence/03-connected-principal.png)
+
+#### 4. Mandate #6 created
+
+Budget `0.05 GEN`, per-action cap `0.02 GEN`, 3 actions, one allowlisted
+recipient labelled "GPU and compute hosting provider". `Funded` is `0 GEN`: a
+mandate is created and funded separately.
+
+![Mandate 6 created, funded 0 GEN](docs/evidence/04-mandate-created.png)
+
+#### 5. What an unfunded mandate does — the deterministic gate, on chain
+
+Before funding, two `request_action` transactions were submitted. Both were
+rolled back by the contract, before any model ran:
+
+```
+Execution Result   ERROR
+Result Code        Rollback
+Error Message      Mandate has insufficient funded balance
+```
+
+![Explorer: request_action rolled back, insufficient funded balance](docs/evidence/08-refused-unfunded.png)
+
+This is the contract behaving correctly, and it is worth keeping as evidence:
+the funded-balance check runs *before* consensus, so an unfunded mandate never
+reaches — or pays for — a model call. The frontend now refuses the same request
+client-side, so a reviewer does not spend gas discovering this.
+
+#### 6. Funded
+
+`Fund amount` `0.05 GEN`, sent by the Principal. `Available funded` becomes
+`0.05 GEN`.
+
+![Mandate 6 funded with 0.05 GEN](docs/evidence/05-funded.png)
+
+#### 7. The consensus record — the result this project exists for
+
+Two requests from the Agent wallet, **identical in every deterministic
+respect**: same mandate, same recipient `0x146e…ec8e`, same amount `0.01 GEN`.
+They differ only in the stated purpose.
+
+![Request history showing AUTHORIZED and DENIED](docs/evidence/06-consensus-record.png)
+
+| | Request #1 | Request #2 |
+|---|---|---|
+| Description | "Purchase one month of GPU compute hosting to run Project Atlas training jobs." | "Purchase a personal gaming console and accessories for home entertainment use." |
+| Decision | **AUTHORIZED** | **DENIED** |
+| Status | EXECUTED | DENIED |
+| Failed check | — | 1 · Scope |
+| Validators' stated reason | "explicitly permitted by the mandate, serves the stated objective, and is consistent with the recipient's role as a compute hosting provider" | "Request for a personal gaming console does not belong to the permitted class of activities (cloud infrastructure and GPU compute for Project Atlas)" |
+| Resolved | 02:02:14Z | 02:03:38Z |
+
+No deterministic rule separates these two. Amount, recipient, cap, budget,
+expiry and action count are identical and all pass. The only thing that differs
+is whether the described purpose fits the mandate the Principal wrote — and
+that is the one question the validators answer.
+
+#### 8. Final state — and the cost of a refusal
+
+![Final mandate state: spent 0.01, actions 2 of 3](docs/evidence/07-final-state.png)
+
+| Field | Value | What it proves |
+|---|---|---|
+| Funded | `0.05 GEN` | unchanged by either request |
+| Spent | **`0.01 GEN`** | only the AUTHORIZED request moved GEN |
+| Actions | **`2 / 3`** | the DENIED request still consumed a slot |
+| Available funded | `0.04 GEN` | `0.05 − 0.01`, recoverable by the Principal |
+
+`Spent` advanced once; `Actions` advanced twice. That gap is the design
+decision named in [`SECURITY.md`](SECURITY.md) §4: a refused request costs an
+action slot, so an Agent cannot re-describe the same spend indefinitely until a
+verdict comes back favourable. The counter is what bounds those attempts.
+
+#### What this run also found
+
+The run was not clean, and the failures are recorded rather than smoothed over,
+because two of them were frontend bugs this release introduced and then fixed:
+
+- The `Fund amount` placeholder read `0.05`, which is indistinguishable from
+  `0.05` typed into the field. The reviewer read it as a filled value, clicked
+  Fund Mandate, and continued believing the mandate was funded when it was not
+  — which is what produced the rolled-back transactions in §5. Numeric
+  placeholders now read `e.g. 0.05`.
+- Request #1 succeeded on chain — recorded AUTHORIZED and EXECUTED above — while
+  the UI displayed "The contract refused this action: idle". "idle" is
+  consensus bookkeeping about a validator, not a contract message. The receipt
+  check was too broad and is now narrow; see [`CHANGELOG.md`](CHANGELOG.md) for
+  what it reads instead, and why the previous check was dead code on StudioNet.
+
+Both are fixed in the code in this repository. The screenshots above were taken
+across the run, so §1–§4 predate the placeholder fix.
 
 ---
 

@@ -20,7 +20,9 @@ Instead of giving an agent unrestricted control of funds, the principal defines 
   real GenVM build, plus a 22-mutant matrix, all 22 killed. Nothing is stubbed.
 - [`SECURITY.md`](SECURITY.md) — what the contract guarantees, what it does not,
   and the limitations accepted by design.
-- [`TESTING.md`](TESTING.md) — the manual run against the deployed contract.
+- [`TESTING.md`](TESTING.md) — the browser run against the deployed contract,
+  with screenshots: the same agent, recipient and amount, one AUTHORIZED and
+  one DENIED on the stated purpose alone.
 - [`CHANGELOG.md`](CHANGELOG.md) — what changed and why.
 
 ```bash
